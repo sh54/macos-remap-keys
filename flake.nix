@@ -10,7 +10,10 @@
   };
 
   outputs = { self, nixpkgs, flake-utils, flake-compat }:
-    flake-utils.lib.eachSystem [ "x86_64-darwin" ] (system:
+    flake-utils.lib.eachSystem [
+      "aarch64-darwin"
+      "x86_64-darwin"
+    ] (system:
       let
         name = "macos-remap-keys";
         pkgs = import nixpkgs { inherit system; };
@@ -18,19 +21,15 @@
         dependencies = pypkgs: with pypkgs; [
           pyyaml
         ];
-      in
-      rec {
-        packages."${name}" = python.pkgs.buildPythonPackage {
+        python-pkg = python.pkgs.buildPythonPackage {
           name = name;
           version = "0.1";
           src = ./.;
           propagatedBuildInputs = dependencies python.pkgs;
-          meta = {
-            homepage = "https://github.com/veehaitch/${name}";
-            description = self.description;
-            maintainers = pkgs.lib.maintainers.veehaitch;
-          };
         };
+      in
+      rec {
+        packages."${name}" = python-pkg;
         defaultPackage = self.packages.${system}.${name};
 
         # `nix run`
@@ -55,17 +54,17 @@
         };
 
         # `nix run .#hidutil`
-        apps.hidutil = {
-          type = "app";
-          program =
-            let drv = pkgs.writeShellScript "remap-launchd" ''
-              hidutil property --set \
-                `${defaultPackage}/bin/remap.py \
+        apps.hidutil = let
+          script = pkgs.writeShellScriptBin "example-script" ''
+            hidutil property --set \
+              `${python-pkg}/bin/remap.py \
                 --config ${./config.yaml} \
                 --keytables ${./keytables.yaml} \
                 --hidutil-property`
-            '';
-            in drv.outPath;
+          '';
+        in {
+          type = "app";
+          program = "${script}/bin/example-script";
         };
 
         # `nix develop`
